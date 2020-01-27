@@ -8,6 +8,37 @@ from influxdb import DataFrameClient
 
 # TODO: gather static variable to a single file to better manage configuration
 TIMESTR_FORMAT = "%Y-%m-%d %H:%M:%S"
+START_TIMETAG = "fromDate"
+END_TIMETAG = "toDate"
+
+
+def _validation(func):
+    """Validation decorator"""
+    def wrapper(*args, **kwargs):
+        return eval('_validate_' + func.__name__)(*args, **kwargs)
+    return wrapper
+
+
+@_validation
+def get_timezone(data):
+    return data.get("timeZone")
+
+
+@_validation
+def get_timestamp(data, tag=START_TIMETAG):
+    """
+    :param data: user given dataset
+    :param tag: fromDate or toDate
+    :type data: dict
+    :type tag: str
+    :return: string format of timestamp
+    """
+    return data.get(tag)
+
+
+@_validation
+def get_stock_name(data, stockName):
+    return stockName
 
 
 @get('/test')
@@ -31,22 +62,16 @@ def req_handler(stockName):
             raise ValueError
 
         try:
-            # TODO: validate stockName
-            if data.get("stockName"):
-                if data.get("stockName") != stockName:
-                    raise ValueError
-
-            time_zone = _validate_timezone(data.get("timeZone"))
+            stock_name = get_stock_name(data, stockName)
+            time_zone = get_timezone(data)
             if not time_zone:
                 time_zone = "America/Los_Angeles"
             tz = dateutil.tz.gettz(time_zone)
             # from and to must be UTC
             # truncate %H:%M:%S to 00:00:00 - 23:59:59 limit to day query only
-            from_date =\
-                _pruning_timestamp(_validate_timestamp(data.get("fromDate")))
-            to_date =\
-                _pruning_timestamp(_validate_timestamp(data.get("toDate")),
-                                   to_date=True)
+            from_date = _pruning_timestamp(get_timestamp(data, START_TIMETAG))
+            to_date = _pruning_timestamp((get_timestamp(data, END_TIMETAG)),
+                                         to_date=True)
             # set to past week from today if no from and to date
             # TODO: Validate scenario given only fromDate or toDate
             if not from_date and not to_date:
@@ -143,7 +168,15 @@ def _interval_generator(from_date, to_date):
         yield (pstart.strftime(TIMESTR_FORMAT), pend.strftime(TIMESTR_FORMAT))
 
 
-def _validate_timezone(tz_str):
+def _validate_get_stock_name(*args):
+    req_body_stock_name = args[0].get("stockName")
+    path_stock_name = args[1]
+    if req_body_stock_name and req_body_stock_name != path_stock_name:
+        raise ValueError
+
+
+def _validate_get_timezone(*args):
+    tz_str = args[0].get('timezone')
     if not tz_str:
         return None
     if not dateutil.tz.gettz(tz_str):
@@ -151,7 +184,9 @@ def _validate_timezone(tz_str):
     return tz_str
 
 
-def _validate_timestamp(dt_str):
+def _validate_get_timestamp(*args):
+    tag = args[1]
+    dt_str = args[0].get(tag)
     if not dt_str:
         return None
     if len(dt_str.split(" ")) == 2:
