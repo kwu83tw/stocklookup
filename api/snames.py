@@ -148,6 +148,34 @@ def query_dataset(stockName, from_date_utc, to_date_utc, tz):
     return res
 
 
+def query_max_price_per_month(stockName):
+    """
+    Return max price per month
+    """
+    cli = DataFrameClient(database="DT")
+    dfs = cli.query("select * from market_trends").get('market_trends')
+    bname = dfs["business_name"] == stockName
+    # format data
+    dfs["Date"] = pd.to_datetime(df["Date"])
+    dfs["Month"] = dfs["Date"].dt.month
+    res = df[bname].groupby("Month").max(axis="Stock Price")
+    return res
+
+
+def query_deal_between_1pm_to_4pm_on_Feb(stockName):
+    """
+    Return price between 1pm-4pm on Feb
+    """
+    cli = DataFrameClient(database="DT")
+    dfs = cli.query("select * from market_trends").get('market_trends')
+    bname = dfs["business_name"] == stockName
+    fter_hour = df["Date"].dt.hour >= 13
+    before_hour = df["Date"].dt.hour < 16
+    deal_after_one = df[after_hour & before_hour]
+    res = deal_after_one[bname & (df["Month"] == 2)]
+    return res
+
+
 def _interval_generator(from_date, to_date):
     """
     Calculate interval between from_date to to_date through each
